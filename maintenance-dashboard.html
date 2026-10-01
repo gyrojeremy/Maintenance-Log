@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}</style>
+<title>Maintenance Insights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column of full-width panels under a single filter row; summary tiles first, then trend, then where/why, then detail tables. */
+:root {
+  --bg: #f4f5f0;
+  --surface: #fcfcfb;
+  --ink: #1b1d1c;
+  --ink-2: #4f524b;
+  --ink-3: #6f7269;
+  --line: #dcdfd5;
+  --line-2: #e9ebe4;
+  --accent: #56711b;          /* kiwi green, UI only (not data) */
+  --accent-wash: #e8eedb;
+  --banner: #fff4d6;
+  --banner-ink: #6a4b00;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --h0: #f0efec; --h1: #cde2fb; --h2: #9ec5f4; --h3: #6da7ec; --h4: #3987e5; --h5: #256abf; --h6: #184f95;
+  --font-display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1b1d1c; --surface: #232624; --ink: #eeefe9; --ink-2: #c3c5bb; --ink-3: #9a9c92;
+  --line: #3a3d39; --line-2: #2e312d; --accent: #a3c24f; --accent-wash: #2f3a1f;
+  --banner: #3a321c; --banner-ink: #f1d488;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --h0: #2c2f2b; --h1: #1c3a5e; --h2: #184f95; --h3: #1c5cab; --h4: #2a78d6; --h5: #5598e7; --h6: #9ec5f4;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #1b1d1c; --surface: #232624; --ink: #eeefe9; --ink-2: #c3c5bb; --ink-3: #9a9c92;
+  --line: #3a3d39; --line-2: #2e312d; --accent: #a3c24f; --accent-wash: #2f3a1f;
+  --banner: #3a321c; --banner-ink: #f1d488;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --h0: #2c2f2b; --h1: #1c3a5e; --h2: #184f95; --h3: #1c5cab; --h4: #2a78d6; --h5: #5598e7; --h6: #9ec5f4;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 20px; padding-block: 20px 48px; display: grid; gap: 16px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+.sub { color: var(--ink-3); font-size: 13px; margin: 2px 0 0; }
+.num { font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.banner { background: var(--banner); color: var(--banner-ink); border-radius: var(--r); padding: 8px 12px; font-size: 13px; }
+.banner b { font-weight: 600; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.f { display: grid; gap: 4px; min-width: 0; }
+.f label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; }
+select, input[type=date], button { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+select:focus-visible, input:focus-visible, button:focus-visible, .cell:focus-visible, .hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { cursor: pointer; }
+button.ghost { background: transparent; color: var(--accent); border-color: transparent; font-weight: 600; padding-inline: 4px; }
+button.ghost:hover { text-decoration: underline; }
+.custom { display: flex; gap: 6px; align-items: center; }
+.custom[hidden] { display: none !important; }
+
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; }
+.tile .v { font-family: var(--font-display); font-weight: 800; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .v small { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--ink-2); margin-left: 3px; }
+.tile .d { font-size: 12px; color: var(--ink-3); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px 16px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart { width: 100%; min-width: 0; position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis text, .lbl { fill: var(--ink-3); font-size: 11px; font-family: var(--font-body); font-variant-numeric: tabular-nums; }
+.lbl-strong { fill: var(--ink-2); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.grid line { stroke: var(--line-2); }
+.base { stroke: var(--line); }
+.hit { cursor: default; }
+.seg { transition: opacity .12s; }
+.dim .seg { opacity: .45; }
+.dim .hover .seg { opacity: 1; }
+
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: none; }
+.loc b { font-weight: 600; }
+.loc span { color: var(--ink-3); }
+.bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.bar-cell i { display: block; height: 8px; border-radius: 2px; background: var(--s2); }
+.chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; color: var(--ink-2); }
+.chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.desc { color: var(--ink-2); min-width: 220px; }
+.empty { color: var(--ink-3); padding: 18px 0; text-align: center; }
+.note { font-size: 12px; color: var(--ink-3); }
+.defs { font-size: 12px; color: var(--ink-2); display: grid; gap: 6px; }
+.defs p { margin: 0; max-width: 90ch; }
+.defs b { color: var(--ink); font-weight: 600; }
+
+.heat { display: grid; gap: 2px; font-size: 12px; }
+.heat .row { display: grid; grid-template-columns: 120px repeat(5, minmax(34px, 1fr)); gap: 2px; align-items: stretch; }
+.heat .rl { color: var(--ink-2); padding-right: 6px; display: flex; align-items: center; justify-content: flex-end; text-align: right; line-height: 1.2; }
+.heat .ch { color: var(--ink-3); text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .04em; padding-bottom: 2px; }
+.cell { border: none; border-radius: 3px; padding: 6px 0; text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; cursor: pointer; }
+.cell:hover { box-shadow: inset 0 0 0 2px var(--ink); }
+.cell.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgb(0 0 0 / .14); min-width: 150px; }
+#tip .t { color: var(--ink-3); margin-bottom: 4px; font-size: 11px; }
+#tip .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#tip .row span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+#tip .row i { width: 10px; height: 2px; display: inline-block; }
+#tip .row b { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 960px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wrap { padding-inline: 16px; } .heat .row { grid-template-columns: 92px repeat(5, minmax(28px, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .seg { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Maintenance Insights</h1>
+      <p class="sub">Packhouse maintenance log · read-only view for other departments</p>
+    </div>
+  </header>
+  <div class="banner"><b>Mock-up.</b> Every entry on this page is made-up example data for feedback only. The real version will read from the Trevelyan maintenance log once IT has set up the backend.</div>
+
+  <section class="filters" aria-label="Filters">
+    <div class="f"><label for="fRange">Date range</label>
+      <select id="fRange">
+        <option value="season">Kiwifruit season 2026</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="ytd" selected>This year</option>
+        <option value="custom">Custom…</option>
+      </select></div>
+    <div class="custom f" id="customWrap" hidden><label for="fFrom">From – to</label>
+      <div class="custom"><input type="date" id="fFrom"><input type="date" id="fTo" aria-label="To date"></div></div>
+    <div class="f"><label for="fShed">Shed</label><select id="fShed"></select></div>
+    <div class="f"><label for="fArea">Area</label><select id="fArea"></select></div>
+    <div class="f"><label for="fSub">Sub category</label><select id="fSub" disabled></select></div>
+    <div class="f"><label for="fStatus">Call status</label><select id="fStatus"></select></div>
+    <button class="ghost" id="reset" type="button">Reset filters</button>
+  </section>
+
+  <section class="tiles" id="tiles" aria-label="Summary"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Jobs per week</h2><p class="sub" id="weekSub">By call status</p></div>
+      <div class="legend" id="legendWeek"></div>
+    </div>
+    <div class="chart" id="weekChart"></div>
+    <div><button class="ghost" id="weekTableBtn" type="button" aria-expanded="false">Show as table</button></div>
+    <div class="scroll" id="weekTable" hidden></div>
+  </section>
+
+  <div class="two">
+    <section class="panel">
+      <div class="panel-head">
+        <div><h2>Where breakdowns happen</h2><p class="sub">Reactive R&amp;M and Temporary Repair jobs by area and shed · click a square to filter</p></div>
+      </div>
+      <div class="scroll"><div class="heat" id="heat"></div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <div><h2>Time on job by area</h2><p class="sub">Hours, by call status</p></div>
+        <div class="legend" id="legendArea"></div>
+      </div>
+      <div class="chart" id="areaChart"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Breakdowns by sub category</h2><p class="sub" id="subSub">Top 15 across all areas · pick an area to see all of its sub categories · click a bar to filter</p></div>
+    </div>
+    <div class="chart" id="subChart"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Repeat problems</h2><p class="sub">Most frequent breakdown locations (Shed · Area · Sub category), top 10</p></div>
+    </div>
+    <div class="scroll" id="repeat"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Recent jobs</h2><p class="sub" id="recentSub">Latest 20 entries</p></div>
+    </div>
+    <div class="scroll" id="recent"></div>
+    <p class="note">Staff names are hidden in this view until the maintenance manager confirms what other departments should see.</p>
+  </section>
+
+  <section class="panel defs" aria-label="How these numbers are worked out">
+    <h2>How these numbers are worked out</h2>
+    <p><b>Breakdowns</b> are entries logged as Reactive R&amp;M or Temporary Repair.</p>
+    <p><b>MTTR (mean time to repair)</b> is the average time on job for those breakdowns, as entered by the tech.</p>
+    <p><b>MTBF (mean time between failures)</b> is the average number of days between one breakdown and the next at the same Shed, Area and Sub category. Locations with only one breakdown in the date range aren't included.</p>
+    <p><b>Time on job</b> is hands-on time entered by the tech, not line downtime.</p>
+  </section>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+(() => {
+  // ---------- Reference lists (from the app) ----------
+  const SHEDS = ["Shed 0", "Shed 1", "Shed 2", "Shed 3", "Shed 4"];
+  const STATUSES = ["Preventative R&M", "Reactive R&M", "Startup Procedure", "Temporary Repair"]; // fixed colour order
+  const BREAK = new Set(["Reactive R&M", "Temporary Repair"]);
+  const isBreak = (e) => BREAK.has(e.status);
+  const SVAR = { "Preventative R&M": "--s1", "Reactive R&M": "--s2", "Startup Procedure": "--s3", "Temporary Repair": "--s4" };
+  const AREAS = ["Bin Handling","Infeed","Grading","Class 1 Sizer","Automation","Bridge","Class 2 Sizer","QC","DOCO","EAN","Strapping","Pallet Trolley","Bagging Machine","Other"];
+  const SUBS = {
+    "Bin Handling": ["Infeed Rapid Door","1st Stage Infeed Rollers","2nd Stage Infeed Rollers","De-Stacker","Tipper","Bin Transfer","Sanitizer","Re-Stacker","Outfeed","Hydraulic Power Pack"],
+    "Infeed": ["Bin Blower","Tipper Belt","Soft Sorting","Bottom Belt","Riser","Brush Unit","Dust / Leaf Belts","Weigh Scales"],
+    "Grading": ["A-Belt Conveyors","Grading Tables","Flatometers","B-Belt Conveyors","Pooling Table"],
+    "Class 1 Sizer": ["Main Drive","Load Belts","Spill Belts","1st Set Rotation Belts","Recycle Conveyors","Weigh Section","Labeller","Cross Belts","Trayline","EAN Printers"],
+    "Bridge": ["Bridge"],
+    "Class 2 Sizer": ["Singulator","Paddle Wheel","Weigh Section","TASC","Labeller","Tray Line","Packing Arms","Main Drive"],
+    "QC": ["QC"], "DOCO": ["DOCO"], "EAN": ["EAN","Printers"],
+    "Strapping": ["Strapping Machine","Manual Strapping"],
+    "Pallet Trolley": ["Trollies"], "Bagging Machine": ["Bagging Machine"], "Other": ["Other"],
+  };
+  const AREA_W = { "Bin Handling": 14, "Infeed": 12, "Grading": 9, "Class 1 Sizer": 22, "Bridge": 3, "Class 2 Sizer": 12, "QC": 3, "DOCO": 2, "EAN": 6, "Strapping": 7, "Pallet Trolley": 3, "Bagging Machine": 4, "Other": 3 };
+
+  // ---------- Made-up data (seeded, so it's the same every load) ----------
+  let seed = 20260930;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+  const wpick = (obj) => { const tot = Object.values(obj).reduce((a, b) => a + b, 0); let x = rnd() * tot; for (const [k, w] of Object.entries(obj)) { if ((x -= w) <= 0) return k; } return Object.keys(obj)[0]; };
+  const poisson = (l) => { let L = Math.exp(-l), k = 0, p = 1; do { k++; p *= rnd(); } while (p > L); return k - 1; };
+
+  const HOT = [ // locations that break down more often
+    { shed: "Shed 2", area: "Class 1 Sizer", sub: "Load Belts", rate: 0.16 },
+    { shed: "Shed 3", area: "Bin Handling", sub: "Tipper", rate: 0.11 },
+    { shed: "Shed 1", area: "Infeed", sub: "Brush Unit", rate: 0.09 },
+    { shed: "Shed 4", area: "Strapping", sub: "Strapping Machine", rate: 0.08 },
+    { shed: "Shed 2", area: "Class 2 Sizer", sub: "Singulator", rate: 0.06 },
+  ];
+  const REACT_DESC = ["Belt tracking off, re-tracked and tensioned","Replaced seized bearing","Sensor out of alignment, realigned and tested","Motor tripped on overload, reset and checked amps","Cleared jam and checked guides","Replaced worn roller","Chain jumped sprocket, refitted and tensioned","Prox sensor faulty, replaced","Air leak on cylinder, replaced fitting","Gearbox noisy, topped up oil and monitored","Drive belt snapped, replaced","Loose guard rattling, tightened","E-stop circuit fault, found loose terminal","Replaced damaged flight on conveyor"];
+  const PREV_DESC = ["Greased bearings","Inspected and adjusted belt tension","Lubed chains","Checked and cleaned sensors","Weekly inspection, no issues","Replaced wear strips","Checked gearbox oil levels","Cleaned and inspected rollers"];
+  const START_DESC = ["Startup checks completed","Pre-start walk round, all OK","Startup, reset faults on panel"];
+  const TEMP_DESC = ["Cable-tied guard until part arrives","Bypassed faulty roller, part on order","Temporary splice on belt, replace at next shutdown"];
+  const TIMES = {
+    "Preventative R&M": { 15: 3, 20: 3, 30: 4, 45: 2, 60: 2, 90: 1 },
+    "Reactive R&M": { 10: 2, 15: 3, 20: 3, 30: 4, 45: 3, 60: 3, 90: 2, 120: 1, 180: 0.5 },
+    "Startup Procedure": { 10: 3, 15: 3, 20: 1 },
+    "Temporary Repair": { 10: 2, 15: 3, 20: 2, 30: 2 },
+  };
+
+  const DAY = 86400000;
+  const START = Date.UTC(2026, 0, 5), END = Date.UTC(2026, 9, 2);
+  const SEASON = [Date.UTC(2026, 2, 16), Date.UTC(2026, 5, 30)];
+  const TODAY = END;
+  const entries = [];
+  let id = 1;
+  for (let t = START; t <= END; t += DAY) {
+    const inKiwi = t >= SEASON[0] && t <= SEASON[1];
+    const inAvo = !inKiwi && (t < SEASON[0] || t >= Date.UTC(2026, 8, 1));
+    const dow = new Date(t).getUTCDay();
+    for (const shed of SHEDS) {
+      const running = inKiwi || (inAvo && (shed === "Shed 1" || shed === "Shed 2"));
+      let lambda = running ? (inKiwi ? 2.4 : 1.1) : 0.25;
+      if (dow === 0) lambda *= running && inKiwi ? 0.8 : 0.2;
+      const push = (status, area, sub) => {
+        const h = 6 + Math.floor(rnd() * 14), m = Math.floor(rnd() * 60);
+        const desc = status === "Reactive R&M" ? pick(REACT_DESC) : status === "Preventative R&M" ? pick(PREV_DESC) : status === "Startup Procedure" ? pick(START_DESC) : pick(TEMP_DESC);
+        entries.push({ id: id++, time: t + (h * 60 + m) * 60000, shed, area, sub, status, mins: +wpick(TIMES[status]), desc });
+      };
+      const n = poisson(lambda);
+      for (let i = 0; i < n; i++) {
+        const status = running ? wpick({ "Preventative R&M": 40, "Reactive R&M": 38, "Startup Procedure": 14, "Temporary Repair": 6 }) : wpick({ "Preventative R&M": 80, "Reactive R&M": 12, "Startup Procedure": 4, "Temporary Repair": 4 });
+        const area = wpick(AREA_W);
+        push(status, area, pick(SUBS[area]));
+      }
+      if (running) for (const hz of HOT) if (hz.shed === shed && rnd() < hz.rate) push("Reactive R&M", hz.area, hz.sub);
+    }
+  }
+  entries.sort((a, b) => a.time - b.time);
+
+  // ---------- Helpers ----------
+  const $ = (s) => document.querySelector(s);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const k in props) { if (k === "class") e.className = props[k]; else if (k === "style") e.setAttribute("style", props[k]); else e[k] = props[k]; } for (const c of kids) e.append(c); return e; };
+  const fmtDate = (t, opts = { day: "numeric", month: "short" }) => new Date(t).toLocaleDateString("en-NZ", { timeZone: "UTC", ...opts });
+  const fmtMins = (m) => m >= 60 ? (m % 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : `${m / 60} h`) : `${Math.round(m)} min`;
+  const niceStep = (v) => { const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; };
+  // round tick step, then a max that is a whole number of steps
+  const niceScale = (v) => { const step = Math.max(1, niceStep(Math.max(v, 1) / 4)); return { step, max: Math.max(step, Math.ceil(v / step) * step) }; };
+  const weekStart = (t) => { const d = new Date(t); const dow = (d.getUTCDay() + 6) % 7; return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - dow * DAY; };
+  const toISO = (t) => new Date(t).toISOString().slice(0, 10);
+
+  // ---------- Tooltip ----------
+  const tip = $("#tip");
+  function showTip(evt, title, rows) {
+    tip.replaceChildren(h("div", { class: "t", textContent: title }));
+    for (const r of rows) {
+      const left = h("span"); if (r.color) left.append(h("i", { style: `background:${r.color}` })); left.append(document.createTextNode(r.label));
+      tip.append(h("div", { class: "row" }, left, h("b", { textContent: r.value })));
+    }
+    tip.hidden = false;
+    const x = evt.clientX ?? (evt.target.getBoundingClientRect().left + 10), y = evt.clientY ?? evt.target.getBoundingClientRect().top;
+    const w = tip.offsetWidth, ht = tip.offsetHeight;
+    tip.style.left = Math.min(window.innerWidth - w - 8, x + 14) + "px";
+    tip.style.top = Math.max(8, y - ht - 12) + "px";
+  }
+  const hideTip = () => { tip.hidden = true; };
+
+  // ---------- Filters ----------
+  const fRange = $("#fRange"), fShed = $("#fShed"), fArea = $("#fArea"), fStatus = $("#fStatus"), fSub = $("#fSub"), fFrom = $("#fFrom"), fTo = $("#fTo");
+  const opt = (sel, values, allLabel) => { sel.replaceChildren(h("option", { value: "", textContent: allLabel })); for (const v of values) sel.append(h("option", { value: v, textContent: v })); };
+  opt(fShed, SHEDS, "All sheds");
+  opt(fArea, AREAS.filter((a) => a !== "Automation"), "All areas");
+  opt(fStatus, STATUSES, "All call statuses");
+  function syncSubs() {
+    const keep = fSub.value;
+    if (!fArea.value) { fSub.replaceChildren(h("option", { value: "", textContent: "Pick an area first" })); fSub.disabled = true; return; }
+    opt(fSub, SUBS[fArea.value] || [], "All sub categories"); fSub.disabled = false;
+    fSub.value = (SUBS[fArea.value] || []).includes(keep) ? keep : "";
+  }
+  syncSubs();
+  fFrom.value = toISO(SEASON[0]); fTo.value = toISO(TODAY);
+  fFrom.min = fTo.min = toISO(START); fFrom.max = fTo.max = toISO(TODAY);
+
+  function range() {
+    switch (fRange.value) {
+      case "season": return [SEASON[0], SEASON[1] + DAY - 1, "Kiwifruit season 2026 (16 Mar – 30 Jun)"];
+      case "30": return [TODAY - 29 * DAY, TODAY + DAY - 1, "Last 30 days"];
+      case "90": return [TODAY - 89 * DAY, TODAY + DAY - 1, "Last 90 days"];
+      case "custom": { const a = Date.parse(fFrom.value) || START, b = Date.parse(fTo.value) || TODAY; return [Math.min(a, b), Math.max(a, b) + DAY - 1, `${fmtDate(Math.min(a, b))} – ${fmtDate(Math.max(a, b))}`]; }
+      default: return [START, TODAY + DAY - 1, "This year"];
+    }
+  }
+  function filtered(ignoreSub) {
+    const [a, b] = range();
+    return entries.filter((e) => e.time >= a && e.time <= b && (!fShed.value || e.shed === fShed.value) && (!fArea.value || e.area === fArea.value) && (ignoreSub || !fSub.value || e.sub === fSub.value) && (!fStatus.value || e.status === fStatus.value));
+  }
+
+  // ---------- Metrics ----------
+  function mtbfGroups(rows) {
+    const groups = new Map();
+    for (const e of rows) if (isBreak(e)) { const k = `${e.shed}|${e.area}|${e.sub}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
+    return groups;
+  }
+  function gaps(list) { const g = []; for (let i = 1; i < list.length; i++) g.push((list[i].time - list[i - 1].time) / DAY); return g; }
+
+  function renderTiles(rows) {
+    const react = rows.filter(isBreak);
+    const allGaps = []; for (const list of mtbfGroups(rows).values()) allGaps.push(...gaps(list));
+    const mttr = react.length ? react.reduce((s, e) => s + e.mins, 0) / react.length : null;
+    const mtbf = allGaps.length ? allGaps.reduce((a, b) => a + b, 0) / allGaps.length : null;
+    const hours = rows.reduce((s, e) => s + e.mins, 0) / 60;
+    const prev = rows.filter((e) => e.status === "Preventative R&M").length;
+    const tiles = [
+      { k: "Jobs logged", v: rows.length.toLocaleString("en-NZ"), d: `${prev.toLocaleString("en-NZ")} preventative` },
+      { k: "Breakdowns", v: react.length.toLocaleString("en-NZ"), d: rows.length ? `${Math.round(react.length / rows.length * 100)}% of jobs` : "–" },
+      { k: "MTTR", v: mttr == null ? "–" : Math.round(mttr), u: mttr == null ? "" : "min", d: "Average time on job per breakdown" },
+      { k: "MTBF", v: mtbf == null ? "–" : mtbf.toFixed(1), u: mtbf == null ? "" : "days", d: "Between breakdowns, same location" },
+      { k: "Time on tools", v: Math.round(hours).toLocaleString("en-NZ"), u: "h", d: "All call statuses" },
+    ];
+    $("#tiles").replaceChildren(...tiles.map((t) => {
+      const v = h("div", { class: "v", textContent: t.v }); if (t.u) v.append(h("small", { textContent: t.u }));
+      return h("div", { class: "tile" }, h("div", { class: "k", textContent: t.k }), v, h("div", { class: "d", textContent: t.d }));
+    }));
+  }
+
+  function legend(target, statuses) {
+    $(target).replaceChildren(...statuses.map((s) => h("span", {}, h("i", { style: `background:var(${SVAR[s]})` }), document.createTextNode(s))));
+  }
+
+  // ---------- Jobs per week (stacked bars) ----------
+  function renderWeeks(rows) {
+    const [a, b, label] = range();
+    $("#weekSub").textContent = `By call status · ${label}`;
+    const statuses = fStatus.value ? [fStatus.value] : STATUSES;
+    legend("#legendWeek", statuses);
+    const weeks = [];
+    for (let w = weekStart(Math.max(a, START)); w <= Math.min(b, TODAY); w += 7 * DAY) weeks.push({ w, c: Object.fromEntries(statuses.map((s) => [s, 0])), tot: 0 });
+    const idx = new Map(weeks.map((x, i) => [x.w, i]));
+    for (const e of rows) { const i = idx.get(weekStart(e.time)); if (i != null) { weeks[i].c[e.status]++; weeks[i].tot++; } }
+
+    const box = $("#weekChart"); const W = Math.max(300, box.clientWidth); const H = 240;
+    const m = { l: 34, r: 8, t: 10, b: 26 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const { step: ys, max } = niceScale(Math.max(1, ...weeks.map((x) => x.tot)));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Stacked bar chart of jobs per week by call status" });
+    const grid = el("g", { class: "grid axis" }, svg);
+    for (let v = 0; v <= max + 1e-9; v += ys) { const y = m.t + ih - ih * v / max; el("line", { x1: m.l, x2: W - m.r, y1: y, y2: y }, grid); const t = el("text", { x: m.l - 6, y: y + 4, "text-anchor": "end" }, grid); t.textContent = v; }
+    el("line", { class: "base", x1: m.l, x2: W - m.r, y1: m.t + ih, y2: m.t + ih }, svg);
+    const n = weeks.length; const step = iw / Math.max(1, n); const bw = Math.max(2, Math.min(28, step - 2));
+    const g = el("g", {}, svg);
+    const labelEvery = Math.ceil(n / Math.max(1, Math.floor(iw / 64)));
+    weeks.forEach((wk, i) => {
+      const x = m.l + i * step + (step - bw) / 2;
+      const grp = el("g", { class: "hit", tabindex: 0, "aria-label": `Week of ${fmtDate(wk.w)}: ${wk.tot} jobs` }, g);
+      let y = m.t + ih;
+      const segs = statuses.filter((s) => wk.c[s] > 0);
+      segs.forEach((s, j) => {
+        const hgt = ih * wk.c[s] / max; const top = j === segs.length - 1;
+        const gap = j > 0 ? 2 : 0;
+        const hh = Math.max(0, hgt - gap); y -= hgt;
+        const r = top ? Math.min(4, bw / 2, hh) : 0;
+        const x0 = x, x1 = x + bw, y0 = y, y1 = y + hh;
+        el("path", { class: "seg", fill: `var(${SVAR[s]})`, d: r ? `M${x0},${y1} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} H${x1 - r} Q${x1},${y0} ${x1},${y0 + r} V${y1} Z` : `M${x0},${y1} V${y0} H${x1} V${y1} Z` }, grp);
+      });
+      el("rect", { x: m.l + i * step, y: m.t, width: step, height: ih, fill: "transparent" }, grp);
+      const show = (ev) => { g.classList.add("dim"); grp.classList.add("hover"); showTip(ev, `Week of ${fmtDate(wk.w, { day: "numeric", month: "short", year: "numeric" })}`, [...statuses.map((s) => ({ label: s, value: wk.c[s], color: `var(${SVAR[s]})` })), { label: "Total", value: wk.tot }]); };
+      const hide = () => { g.classList.remove("dim"); grp.classList.remove("hover"); hideTip(); };
+      grp.addEventListener("pointermove", show); grp.addEventListener("pointerleave", hide); grp.addEventListener("focus", show); grp.addEventListener("blur", hide);
+      if (i % labelEvery === 0) { const t = el("text", { class: "lbl", x: m.l + i * step + step / 2, y: H - 8, "text-anchor": "middle" }, svg); t.textContent = fmtDate(wk.w); }
+    });
+    box.replaceChildren(svg);
+
+    // table view
+    const tbl = h("table");
+    tbl.append(h("thead", {}, h("tr", {}, h("th", { textContent: "Week of" }), ...statuses.map((s) => h("th", { class: "r", textContent: s })), h("th", { class: "r", textContent: "Total" }))));
+    const tb = h("tbody"); for (const wk of [...weeks].reverse()) tb.append(h("tr", {}, h("td", { textContent: fmtDate(wk.w, { day: "numeric", month: "short", year: "numeric" }) }), ...statuses.map((s) => h("td", { class: "r", textContent: wk.c[s] })), h("td", { class: "r", textContent: wk.tot })));
+    tbl.append(tb); $("#weekTable").replaceChildren(tbl);
+  }
+
+  // ---------- Heatmap: breakdowns by area × shed ----------
+  function renderHeat() {
+    // ignores the Shed/Area filters so the whole picture stays visible; the selected square is outlined
+    const [a, b] = range();
+    const rows = entries.filter((e) => e.time >= a && e.time <= b && isBreak(e));
+    const areas = AREAS.filter((x) => x !== "Automation");
+    const c = {}; let max = 0;
+    for (const e of rows) { const k = e.area + "|" + e.shed; c[k] = (c[k] || 0) + 1; max = Math.max(max, c[k]); }
+    const steps = ["--h1", "--h2", "--h3", "--h4", "--h5", "--h6"];
+    const box = $("#heat"); box.replaceChildren();
+    box.append(h("div", { class: "row" }, h("div"), ...SHEDS.map((s) => h("div", { class: "ch", textContent: s.replace("Shed ", "Shed ") }))));
+    for (const ar of areas) {
+      const r = h("div", { class: "row" }, h("div", { class: "rl", textContent: ar }));
+      for (const sh of SHEDS) {
+        const v = c[ar + "|" + sh] || 0;
+        const si = v ? Math.min(steps.length - 1, Math.floor((v / max) * steps.length - 1e-9)) : -1;
+        const bg = si < 0 ? "var(--h0)" : `var(${steps[si]})`;
+        const dark = document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+        const ink = si < 0 ? "var(--ink-3)" : (dark ? (si >= 4 ? "#0d1a2b" : "#eef4fd") : (si >= 3 ? "#ffffff" : "#10243f"));
+        const sel = fShed.value === sh && fArea.value === ar;
+        const btn = h("button", { class: "cell" + (sel ? " sel" : ""), type: "button", textContent: v || "·", style: `background:${bg};color:${ink}` });
+        btn.setAttribute("aria-label", `${ar}, ${sh}: ${v} breakdowns. Click to filter.`);
+        const show = (ev) => showTip(ev, `${sh} · ${ar}`, [{ label: "Breakdowns", value: v }]);
+        btn.addEventListener("pointermove", show); btn.addEventListener("pointerleave", hideTip); btn.addEventListener("focus", show); btn.addEventListener("blur", hideTip);
+        btn.addEventListener("click", () => { if (sel) { fShed.value = ""; fArea.value = ""; } else { fShed.value = sh; fArea.value = ar; } syncSubs(); render(); });
+        r.append(btn);
+      }
+      box.append(r);
+    }
+  }
+
+  // ---------- Time on job by area (horizontal stacked bars) ----------
+  function renderAreaHours(rows) {
+    const statuses = fStatus.value ? [fStatus.value] : STATUSES;
+    legend("#legendArea", statuses);
+    const agg = new Map();
+    for (const e of rows) { if (!agg.has(e.area)) agg.set(e.area, { area: e.area, tot: 0, c: Object.fromEntries(statuses.map((s) => [s, 0])) }); const a = agg.get(e.area); a.c[e.status] += e.mins / 60; a.tot += e.mins / 60; }
+    const list = [...agg.values()].sort((a, b) => b.tot - a.tot);
+    const box = $("#areaChart");
+    if (!list.length) { box.replaceChildren(h("p", { class: "empty", textContent: "No jobs match these filters." })); return; }
+    const W = Math.max(300, box.clientWidth); const rowH = 24; const m = { l: 112, r: 44, t: 4, b: 22 };
+    const H = m.t + m.b + list.length * rowH; const iw = W - m.l - m.r;
+    const { step: xs, max } = niceScale(Math.max(...list.map((x) => x.tot)));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Horizontal bar chart of hours on job by area" });
+    const grid = el("g", { class: "grid axis" }, svg);
+    for (let v = 0; v <= max + 1e-9; v += xs) { const x = m.l + iw * v / max; el("line", { x1: x, x2: x, y1: m.t, y2: H - m.b }, grid); const t = el("text", { x, y: H - 6, "text-anchor": "middle" }, grid); t.textContent = Math.round(v); }
+    el("line", { class: "base", x1: m.l, x2: m.l, y1: m.t, y2: H - m.b }, svg);
+    const g = el("g", {}, svg);
+    list.forEach((a, i) => {
+      const y = m.t + i * rowH + 5, bh = rowH - 10;
+      const lab = el("text", { class: "lbl", x: m.l - 8, y: y + bh / 2 + 4, "text-anchor": "end" }, svg); lab.textContent = a.area;
+      const grp = el("g", { class: "hit", tabindex: 0, "aria-label": `${a.area}: ${a.tot.toFixed(1)} hours` }, g);
+      let x = m.l; const segs = statuses.filter((s) => a.c[s] > 0);
+      segs.forEach((s, j) => {
+        const w = iw * a.c[s] / max; const gap = j > 0 ? 2 : 0; const ww = Math.max(0, w - gap); const x0 = x + gap; x += w;
+        const last = j === segs.length - 1; const r = last ? Math.min(4, bh / 2, ww) : 0; const x1 = x0 + ww;
+        el("path", { class: "seg", fill: `var(${SVAR[s]})`, d: r ? `M${x0},${y} H${x1 - r} Q${x1},${y} ${x1},${y + r} V${y + bh - r} Q${x1},${y + bh} ${x1 - r},${y + bh} H${x0} Z` : `M${x0},${y} H${x1} V${y + bh} H${x0} Z` }, grp);
+      });
+      const tl = el("text", { class: "lbl-strong", x: x + 6, y: y + bh / 2 + 4 }, svg); tl.textContent = a.tot >= 10 ? Math.round(a.tot) + " h" : a.tot.toFixed(1) + " h";
+      el("rect", { x: 0, y: y - 5, width: W, height: rowH, fill: "transparent" }, grp);
+      const show = (ev) => { g.classList.add("dim"); grp.classList.add("hover"); showTip(ev, a.area, [...statuses.map((s) => ({ label: s, value: a.c[s].toFixed(1) + " h", color: `var(${SVAR[s]})` })), { label: "Total", value: a.tot.toFixed(1) + " h" }]); };
+      const hide = () => { g.classList.remove("dim"); grp.classList.remove("hover"); hideTip(); };
+      grp.addEventListener("pointermove", show); grp.addEventListener("pointerleave", hide); grp.addEventListener("focus", show); grp.addEventListener("blur", hide);
+    });
+    box.replaceChildren(svg);
+  }
+
+  // ---------- Breakdowns by sub category ----------
+  function renderSubs() {
+    const rows = filtered(true).filter(isBreak);
+    const agg = new Map();
+    const key = (e) => fArea.value ? e.sub : `${e.area}|${e.sub}`;
+    if (fArea.value) for (const sc of SUBS[fArea.value] || []) agg.set(sc, { area: fArea.value, sub: sc, n: 0, react: 0, temp: 0, mins: 0 });
+    for (const e of rows) { const k = key(e); if (!agg.has(k)) agg.set(k, { area: e.area, sub: e.sub, n: 0, react: 0, temp: 0, mins: 0 }); const a = agg.get(k); a.n++; a.mins += e.mins; if (e.status === "Temporary Repair") a.temp++; else a.react++; }
+    let list = [...agg.values()].sort((a, b) => b.n - a.n);
+    if (!fArea.value) list = list.filter((x) => x.n > 0).slice(0, 15);
+    $("#subSub").textContent = fArea.value ? `${fArea.value}: every sub category · click a bar to filter` : "Top 15 across all areas · pick an area to see all of its sub categories · click a bar to filter";
+    const box = $("#subChart");
+    if (!list.length || list[0].n === 0) { box.replaceChildren(h("p", { class: "empty", textContent: "No breakdowns match these filters." })); return; }
+    const W = Math.max(300, box.clientWidth); const rowH = 26; const narrow = W < 560;
+    const m = { l: narrow ? 150 : 230, r: 40, t: 4, b: 22 };
+    const H = m.t + m.b + list.length * rowH; const iw = W - m.l - m.r;
+    const { step, max } = niceScale(list[0].n);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Horizontal bar chart of breakdowns by sub category" });
+    const grid = el("g", { class: "grid axis" }, svg);
+    for (let v = 0; v <= max + 1e-9; v += step) { const x = m.l + iw * v / max; el("line", { x1: x, x2: x, y1: m.t, y2: H - m.b }, grid); const t = el("text", { x, y: H - 6, "text-anchor": "middle" }, grid); t.textContent = v; }
+    el("line", { class: "base", x1: m.l, x2: m.l, y1: m.t, y2: H - m.b }, svg);
+    const g = el("g", {}, svg);
+    list.forEach((r, i) => {
+      const y = m.t + i * rowH + 6, bh = rowH - 12;
+      const sel = fSub.value === r.sub && fArea.value === r.area;
+      const lab = el("text", { class: sel ? "lbl-strong" : "lbl", x: m.l - 8, y: y + bh / 2 + 4, "text-anchor": "end" }, svg);
+      const name = fArea.value || r.sub === r.area ? r.sub : `${r.sub} · ${r.area}`;
+      lab.textContent = name.length > (narrow ? 24 : 40) ? name.slice(0, narrow ? 23 : 39) + "…" : name;
+      const grp = el("g", { class: "hit", tabindex: 0, role: "button", "aria-label": `${name}: ${r.n} breakdowns. Click to filter.` }, g);
+      grp.style.cursor = "pointer";
+      const w = iw * r.n / max;
+      if (w > 0) { const rr = Math.min(4, bh / 2, w); el("path", { class: "seg", fill: "var(--s2)", d: `M${m.l},${y} H${m.l + w - rr} Q${m.l + w},${y} ${m.l + w},${y + rr} V${y + bh - rr} Q${m.l + w},${y + bh} ${m.l + w - rr},${y + bh} H${m.l} Z`, stroke: sel ? "var(--ink)" : "none", "stroke-width": sel ? 1.5 : 0 }, grp); }
+      const tl = el("text", { class: "lbl-strong", x: m.l + w + 6, y: y + bh / 2 + 4 }, svg); tl.textContent = r.n;
+      el("rect", { x: 0, y: y - 6, width: W, height: rowH, fill: "transparent" }, grp);
+      const show = (ev) => { g.classList.add("dim"); grp.classList.add("hover"); showTip(ev, name, [{ label: "Reactive R&M", value: r.react }, { label: "Temporary Repair", value: r.temp }, { label: "MTTR", value: r.n ? Math.round(r.mins / r.n) + " min" : "–" }, { label: "Time on job", value: (r.mins / 60).toFixed(1) + " h" }]); };
+      const hide = () => { g.classList.remove("dim"); grp.classList.remove("hover"); hideTip(); };
+      const click = () => { if (sel) { fSub.value = ""; } else { fArea.value = r.area; syncSubs(); fSub.value = r.sub; } hideTip(); render(); };
+      grp.addEventListener("pointermove", show); grp.addEventListener("pointerleave", hide); grp.addEventListener("focus", show); grp.addEventListener("blur", hide);
+      grp.addEventListener("click", click); grp.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); click(); } });
+    });
+    box.replaceChildren(svg);
+  }
+
+  // ---------- Repeat problems ----------
+  function renderRepeat(rows) {
+    const groups = [...mtbfGroups(rows).entries()].map(([k, list]) => {
+      const [shed, area, sub] = k.split("|"); const g = gaps(list);
+      return { shed, area, sub, n: list.length, mtbf: g.length ? g.reduce((a, b) => a + b, 0) / g.length : null, mttr: list.reduce((s, e) => s + e.mins, 0) / list.length, hrs: list.reduce((s, e) => s + e.mins, 0) / 60, last: list[list.length - 1].time };
+    }).sort((a, b) => b.n - a.n || a.mtbf - b.mtbf).slice(0, 10);
+    const box = $("#repeat");
+    if (!groups.length) { box.replaceChildren(h("p", { class: "empty", textContent: "No breakdowns match these filters." })); return; }
+    const max = groups[0].n;
+    const tbl = h("table");
+    tbl.append(h("thead", {}, h("tr", {}, h("th", { textContent: "Location" }), h("th", { class: "r", textContent: "Breakdowns" }), h("th", { class: "r", textContent: "MTBF" }), h("th", { class: "r", textContent: "MTTR" }), h("th", { class: "r", textContent: "Time on job" }), h("th", { class: "r", textContent: "Last breakdown" }))));
+    const tb = h("tbody");
+    for (const r of groups) {
+      const loc = h("td", { class: "loc" }, h("b", { textContent: r.sub }), h("br"), h("span", { textContent: `${r.shed} · ${r.area}` }));
+      const bar = h("td", { class: "r" }, h("div", { class: "bar-cell" }, h("i", { style: `width:${Math.max(4, 80 * r.n / max)}px` }), h("span", { textContent: r.n })));
+      tb.append(h("tr", {}, loc, bar, h("td", { class: "r", textContent: r.mtbf == null ? "–" : r.mtbf.toFixed(1) + " days" }), h("td", { class: "r", textContent: Math.round(r.mttr) + " min" }), h("td", { class: "r", textContent: r.hrs.toFixed(1) + " h" }), h("td", { class: "r", textContent: fmtDate(r.last, { day: "numeric", month: "short", year: "numeric" }) })));
+    }
+    tbl.append(tb); box.replaceChildren(tbl);
+  }
+
+  // ---------- Recent jobs ----------
+  function renderRecent(rows) {
+    const list = rows.slice(-20).reverse();
+    $("#recentSub").textContent = `Latest ${list.length} of ${rows.length.toLocaleString("en-NZ")} matching entries`;
+    const box = $("#recent");
+    if (!list.length) { box.replaceChildren(h("p", { class: "empty", textContent: "No jobs match these filters." })); return; }
+    const tbl = h("table");
+    tbl.append(h("thead", {}, h("tr", {}, ...["Date", "Shed", "Area", "Sub category", "Call status"].map((t) => h("th", { textContent: t })), h("th", { class: "r", textContent: "Time on job" }), h("th", { textContent: "Description" }))));
+    const tb = h("tbody");
+    for (const e of list) {
+      const chip = h("span", { class: "chip" }, h("i", { style: `background:var(${SVAR[e.status]})` }), document.createTextNode(e.status));
+      tb.append(h("tr", {}, h("td", { class: "num", textContent: new Date(e.time).toLocaleString("en-NZ", { timeZone: "UTC", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) }), h("td", { textContent: e.shed }), h("td", { textContent: e.area }), h("td", { textContent: e.sub }), h("td", {}, chip), h("td", { class: "r", textContent: fmtMins(e.mins) }), h("td", { class: "desc", textContent: e.desc })));
+    }
+    tbl.append(tb); box.replaceChildren(tbl);
+  }
+
+  // ---------- Wire up ----------
+  function render() {
+    $("#customWrap").hidden = fRange.value !== "custom";
+    const rows = filtered();
+    renderTiles(rows); renderWeeks(rows); renderHeat(); renderAreaHours(rows); renderSubs(); renderRepeat(rows); renderRecent(rows);
+  }
+  for (const s of [fRange, fShed, fSub, fStatus, fFrom, fTo]) s.addEventListener("change", render);
+  fArea.addEventListener("change", () => { syncSubs(); render(); });
+  $("#reset").addEventListener("click", () => { fRange.value = "ytd"; fShed.value = fArea.value = fStatus.value = ""; syncSubs(); render(); });
+  $("#weekTableBtn").addEventListener("click", (ev) => { const t = $("#weekTable"); t.hidden = !t.hidden; ev.target.textContent = t.hidden ? "Show as table" : "Hide table"; ev.target.setAttribute("aria-expanded", String(!t.hidden)); });
+  let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { const rows = filtered(); renderWeeks(rows); renderAreaHours(rows); renderSubs(); }, 80); }).observe($("#weekChart"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderHeat);
+  new MutationObserver(renderHeat).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  render();
+})();
+</script>
+</body>
+</html>
